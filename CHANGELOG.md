@@ -4,6 +4,12 @@ All notable changes to the ConPlug extension will be documented in this file.
 
 ## [1.0.0] - 2023-07-20
 
+### Bug Fixes
+- Fixed dependency issues with 'glob' module in VSIX installations
+- Added proper webpack bundling to ensure all dependencies are included
+- Improved extension activation reliability
+- Enhanced error handling and diagnostics
+
 ### Initial Release 🎉
 
 #### Features

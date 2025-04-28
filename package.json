@@ -2,7 +2,7 @@
   "name": "conplug",
   "displayName": "ConPlug",
   "description": "Conveniently concatenate files of your project",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.60.0"
   },
@@ -10,11 +10,9 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:conplug.showProfiles",
-    "onCommand:conplug.formFile",
-    "onCommand:conplug.updateFileDecorations"
+    "*"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
@@ -28,6 +26,10 @@
       {
         "command": "conplug.updateFileDecorations",
         "title": "ConPlug: Update file decorations"
+      },
+      {
+        "command": "conplug.test",
+        "title": "ConPlug: Test Extension"
       }
     ],
     "keybindings": [
@@ -140,11 +142,14 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "webpack --mode production",
+    "compile": "webpack --mode development",
+    "watch": "webpack --mode development --watch",
     "lint": "eslint src --ext ts",
-    "package": "npx vsce package"
+    "package": "npx vsce package",
+    "clean": "rm -rf out dist node_modules",
+    "clean-install": "npm run clean && npm install",
+    "clean-package": "npm run clean-install && npm run package"
   },
   "devDependencies": {
     "@types/glob": "^7.1.4",
@@ -154,10 +159,13 @@
     "@typescript-eslint/parser": "^5.1.0",
     "@vscode/vsce": "^2.15.0",
     "eslint": "^8.1.0",
-    "glob": "^7.1.7",
-    "typescript": "^4.4.4"
+    "typescript": "^4.4.4",
+    "webpack": "^5.88.2",
+    "webpack-cli": "^5.1.4",
+    "ts-loader": "^9.4.4"
   },
   "dependencies": {
+    "glob": "^7.1.7",
     "ignore": "^5.1.8",
     "minimatch": "^5.1.0"
   },

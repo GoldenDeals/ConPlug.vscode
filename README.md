@@ -165,9 +165,63 @@ If no `.conplug` file is found, ConPlug can still concatenate all files in your 
 
 ## Troubleshooting
 
+### General Usage Tips
 - If files aren't being included, check if they're excluded by your `.gitignore` file
 - For large projects, consider using more specific file patterns to improve performance
 - Use the file decoration indicators to verify which files will be included
+
+### Command Not Found Issues
+
+If you encounter a "command not found" error after installing ConPlug (especially when installing from a VSIX file), try these solutions:
+
+1. **Completely restart VS Code**: Sometimes a full restart is needed after installing an extension.
+
+2. **Verify extension activation**: 
+   - Open the Command Palette (Ctrl+Shift+P)
+   - Type and run "Developer: Show Running Extensions"
+   - Check if ConPlug is in the list and shows as "Activated"
+
+3. **Run the diagnostic test**:
+   - Open the Command Palette (Ctrl+Shift+P)
+   - Type "ConPlug: Test Extension" and run it
+   - This will display diagnostic information to help identify issues
+
+4. **Manual activation**:
+   - Open any folder or workspace in VS Code
+   - Open the Command Palette (Ctrl+Shift+P)
+   - Type "Developer: Reload Window" and run it
+   - Try using ConPlug commands again
+
+5. **Check extension logs**:
+   - Open the Output panel (View > Output)
+   - Select "Log (Extension Host)" from the dropdown
+   - Look for any error messages related to ConPlug
+
+6. **Clean installation**:
+   - Uninstall ConPlug completely
+   - Close VS Code
+   - Delete the extension folder (usually in `~/.vscode/extensions/conplug-*`)
+   - Restart VS Code
+   - Reinstall the extension
+
+### For VSIX Installation Issues
+
+When installing from a VSIX file, additional steps may help:
+
+1. Use the command line to install:
+   ```
+   code --install-extension conplug-1.0.0.vsix
+   ```
+
+2. After installation, run:
+   ```
+   code --disable-extensions --user-data-dir=/tmp/vscode-clean
+   ```
+   Then enable only ConPlug extension and test.
+
+3. In some environments, you may need to manually copy the extension files to the correct location (especially in restricted environments).
+
+If problems persist after trying these solutions, please report the issue on our GitHub repository with your VS Code version and a full description of the problem.
 
 ## Contributing
 

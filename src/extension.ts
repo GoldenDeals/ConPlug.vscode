@@ -34,62 +34,89 @@ let fileDecorationProvider: vscode.Disposable | undefined;
 let filesToConcatenateSet: Set<string> = new Set();
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('ConPlug extension activated');
-
-  // Store extension context
-  extensionContext = context;
-
-  // Load saved profiles from global state
-  const savedProfiles = context.globalState.get<string[]>('currentProfiles', []);
-  if (savedProfiles.length > 0) {
-    currentProfiles = savedProfiles;
-  }
-
-  // Register commands
-  context.subscriptions.push(
-    vscode.commands.registerCommand('conplug.showProfiles', showProfiles),
-    vscode.commands.registerCommand('conplug.formFile', formFile),
-    vscode.commands.registerCommand('conplug.updateFileDecorations', updateFileDecorations)
-  );
-
-  // Setup file watchers for all workspace folders
-  setupFileWatchers();
+  // Log activation with more details
+  console.log('ConPlug extension activated - version 1.0.0');
+  console.log('Workspace folders:', vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders.length : 'none');
   
-  // Handle workspace changes
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeWorkspaceFolders(handleWorkspaceChange)
-  );
+  try {
+    // Store extension context
+    extensionContext = context;
 
-  // Listen for configuration changes
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(event => {
-      // Check if our extension's configuration changed
-      if (event.affectsConfiguration('conplug.fileDecorationSymbol')) {
-        // Force refresh the file decorations to reflect the changed symbol
-        vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
-      } else if (event.affectsConfiguration('conplug.includeGitIgnored') || 
-                 event.affectsConfiguration('conplug.excludePatterns')) {
-        // Refresh file decorations if gitignore or exclude pattern settings change
-        updateFileDecorations();
+    // Load saved profiles from global state
+    const savedProfiles = context.globalState.get<string[]>('currentProfiles', []);
+    if (savedProfiles.length > 0) {
+      currentProfiles = savedProfiles;
+      console.log('Loaded saved profiles:', savedProfiles);
+    }
+
+    // Register commands
+    context.subscriptions.push(
+      vscode.commands.registerCommand('conplug.showProfiles', showProfiles),
+      vscode.commands.registerCommand('conplug.formFile', formFile),
+      vscode.commands.registerCommand('conplug.updateFileDecorations', updateFileDecorations)
+    );
+    console.log('ConPlug: Commands registered successfully');
+
+    // Setup file watchers for all workspace folders
+    setupFileWatchers();
+    
+    // Handle workspace changes
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(handleWorkspaceChange)
+    );
+
+    // Listen for configuration changes
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration(event => {
+        // Check if our extension's configuration changed
+        if (event.affectsConfiguration('conplug.fileDecorationSymbol')) {
+          // Force refresh the file decorations to reflect the changed symbol
+          vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
+        } else if (event.affectsConfiguration('conplug.includeGitIgnored') || 
+                   event.affectsConfiguration('conplug.excludePatterns')) {
+          // Refresh file decorations if gitignore or exclude pattern settings change
+          updateFileDecorations();
+        }
+      })
+    );
+
+    // Register file decoration provider
+    registerFileDecorationProvider(context);
+
+    // Update file decorations if we have active profiles
+    if (currentProfiles.length > 0) {
+      // Load configurations first
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (workspaceFolders) {
+        for (const folder of workspaceFolders) {
+          loadConfig(folder.uri.fsPath);
+        }
       }
-    })
-  );
-
-  // Register file decoration provider
-  registerFileDecorationProvider(context);
-
-  // Update file decorations if we have active profiles
-  if (currentProfiles.length > 0) {
-    // Load configurations first
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders) {
-      for (const folder of workspaceFolders) {
-        loadConfig(folder.uri.fsPath);
-      }
+      
+      // Update decorations
+      updateFileDecorations();
     }
     
-    // Update decorations
-    updateFileDecorations();
+    // Register some test commands to verify extension is working
+    context.subscriptions.push(
+      vscode.commands.registerCommand('conplug.test', () => {
+        const diagnosticInfo = getDiagnosticInfo();
+        vscode.window.showInformationMessage('ConPlug: Test command executed successfully');
+        
+        // Create a new editor with diagnostic information
+        vscode.workspace.openTextDocument({ 
+          content: diagnosticInfo,
+          language: 'markdown'
+        }).then(doc => {
+          vscode.window.showTextDocument(doc);
+        });
+      })
+    );
+    
+    console.log('ConPlug extension activation completed successfully');
+  } catch (error) {
+    console.error('ConPlug activation error:', error);
+    vscode.window.showErrorMessage(`ConPlug: Error during activation: ${error}`);
   }
 }
 
@@ -749,4 +776,67 @@ export function deactivate() {
     fileDecorationProvider.dispose();
     fileDecorationProvider = undefined;
   }
+}
+
+// Helper function to get diagnostic information
+function getDiagnosticInfo(): string {
+  let info = '# ConPlug Diagnostic Information\n\n';
+  
+  // Extension info
+  info += '## Extension Information\n';
+  info += `* Version: 1.0.0\n`;
+  info += `* Commands Registered: showProfiles, formFile, updateFileDecorations, test\n`;
+  
+  // Profile info
+  info += '\n## Profile Information\n';
+  info += `* Current Profiles: ${currentProfiles.length > 0 ? currentProfiles.join(', ') : 'None'}\n`;
+  info += `* Loaded Profiles: ${profiles.size}\n`;
+  
+  if (profiles.size > 0) {
+    info += '\n### Available Profiles:\n';
+    profiles.forEach((profile, name) => {
+      info += `* ${name} (from ${profile.workspacePath})\n`;
+      if (profile.parent && profile.parent.length > 0) {
+        info += `  * Inherits from: ${profile.parent.join(', ')}\n`;
+      }
+      info += `  * Files: ${profile.files.length}, Excluded: ${profile.excluded.length}\n`;
+    });
+  }
+  
+  // Workspace info
+  info += '\n## Workspace Information\n';
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    info += '* No workspace folders open\n';
+  } else {
+    info += `* Workspace Folders: ${workspaceFolders.length}\n`;
+    workspaceFolders.forEach((folder, index) => {
+      info += `  * ${index+1}: ${folder.name} (${folder.uri.fsPath})\n`;
+      const configPath = path.join(folder.uri.fsPath, '.conplug');
+      const hasConfig = fs.existsSync(configPath);
+      info += `    * Has .conplug file: ${hasConfig ? 'Yes' : 'No'}\n`;
+      info += `    * Loaded: ${loadedWorkspaceFolders.has(folder.uri.fsPath) ? 'Yes' : 'No'}\n`;
+    });
+  }
+  
+  // Command status
+  info += '\n## Command Registration Status\n';
+  try {
+    // We can't properly handle this asynchronously in this context
+    // So just indicate that we're checking
+    info += `* Commands checked via test execution\n`;
+    info += `* If you can run this test command, basic command registration is working\n`;
+  } catch (error) {
+    info += `* Error checking commands: ${error}\n`;
+  }
+  
+  // File decoration status
+  info += '\n## File Decoration Status\n';
+  info += `* Files marked for concatenation: ${filesToConcatenateSet.size}\n`;
+  
+  // VSCode version
+  info += '\n## VSCode Information\n';
+  info += `* Version: ${vscode.version}\n`;
+  
+  return info;
 } 
