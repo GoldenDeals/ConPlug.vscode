@@ -1,0 +1,25 @@
+# Example ConPlug configuration file
+
+# Basic profile with direct file references
+basic {
+    src/extension.ts
+    package.json
+}
+
+# Profile that includes files by directory and pattern
+typescript {
+    src/
+    *.ts
+}
+
+# Child profile that inherits from basic profile
+extended: basic {
+    tsconfig.json
+}
+
+# Profile with multiple parents and exclusions
+complete: basic, typescript {
+    !src/test/
+    !*.test.ts
+    README.md
+} 

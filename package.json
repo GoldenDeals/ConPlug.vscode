@@ -1,0 +1,176 @@
+{
+  "name": "conplug",
+  "displayName": "ConPlug",
+  "description": "Conveniently concatenate files of your project",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:conplug.showProfiles",
+    "onCommand:conplug.formFile",
+    "onCommand:conplug.updateFileDecorations"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "conplug.showProfiles",
+        "title": "ConPlug: Show profiles"
+      },
+      {
+        "command": "conplug.formFile",
+        "title": "ConPlug: Form file and copy to clipboard"
+      },
+      {
+        "command": "conplug.updateFileDecorations",
+        "title": "ConPlug: Update file decorations"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "conplug.showProfiles",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
+      },
+      {
+        "command": "conplug.formFile",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f"
+      }
+    ],
+    "configuration": {
+      "title": "ConPlug",
+      "properties": {
+        "conplug.includeGitIgnored": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include files in .gitignore when added by glob pattern"
+        },
+        "conplug.autoCopyToClipboard": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically copy to clipboard when file is formed"
+        },
+        "conplug.headerPrefix": {
+          "type": "string",
+          "default": "\n",
+          "description": "Text to insert before each file header comment"
+        },
+        "conplug.headerSuffix": {
+          "type": "string",
+          "default": "\n",
+          "description": "Text to insert after each file header comment"
+        },
+        "conplug.fileDecorationSymbol": {
+          "type": "string",
+          "default": "🐺",
+          "description": "Symbol to use as a badge for files included in the active profile(s)"
+        },
+        "conplug.excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/out/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.vscode/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/*.log"
+          ],
+          "description": "Glob patterns to exclude when using 'all files' mode (no .conplug file)"
+        },
+        "conplug.languageCommentMap": {
+          "type": "object",
+          "default": {
+            ".sh": "#",
+            ".bash": "#",
+            ".zsh": "#",
+            ".py": "#",
+            ".rb": "#",
+            ".pl": "#",
+            ".pm": "#",
+            ".yml": "#",
+            ".yaml": "#",
+            ".toml": "#",
+            ".conf": "#",
+            ".ini": "#",
+            ".cfg": "#",
+            ".sql": "--",
+            ".lua": "--",
+            "default": "//"
+          },
+          "description": "Mapping of file extensions to comment styles"
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "conplug.fileDecorationForeground",
+        "description": "Color for the ConPlug file decoration mark",
+        "defaults": {
+          "dark": "#6495ED",
+          "light": "#0000CD",
+          "highContrast": "#FFFFFF"
+        }
+      }
+    ],
+    "languages": [
+      {
+        "id": "conplug",
+        "aliases": ["ConPlug", "conplug"],
+        "extensions": [".conplug"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "conplug",
+        "scopeName": "source.conplug",
+        "path": "./syntaxes/conplug.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "npx vsce package"
+  },
+  "devDependencies": {
+    "@types/glob": "^7.1.4",
+    "@types/node": "^14.17.0",
+    "@types/vscode": "^1.60.0",
+    "@typescript-eslint/eslint-plugin": "^5.1.0",
+    "@typescript-eslint/parser": "^5.1.0",
+    "@vscode/vsce": "^2.15.0",
+    "eslint": "^8.1.0",
+    "glob": "^7.1.7",
+    "typescript": "^4.4.4"
+  },
+  "dependencies": {
+    "ignore": "^5.1.8",
+    "minimatch": "^5.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GoldenDeals/ConPlug.vscode.git"
+  },
+  "keywords": [
+    "concatenate",
+    "files",
+    "profiles"
+  ],
+  "author": "",
+  "publisher": "ConPlug",
+  "license": "MIT"
+}
