@@ -111,6 +111,11 @@
             "default": "//"
           },
           "description": "Mapping of file extensions to comment styles"
+        },
+        "conplug.maxContentSize": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Maximum total size of concatenated content in bytes. If exceeded, a list of files with sizes will be generated instead of the content. (Default: 1048576 = 1MB)"
         }
       }
     },
