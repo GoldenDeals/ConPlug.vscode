@@ -382,107 +382,194 @@ async function formFile() {
     return;
   }
 
+  // Get plugin configuration
+  const config = vscode.workspace.getConfiguration('conplug');
+  const maxContentSize = config.get<number>('maxContentSize', 1048576); // Default 1MB
+  const headerPrefix = config.get<string>('headerPrefix', "\n");
+  const headerSuffix = config.get<string>('headerSuffix', "\n");
+  const autoCopyToClipboard = config.get<boolean>('autoCopyToClipboard', true); // Assuming default is true
+
   // Get all files to concatenate
   const allFiles = new Set<string>();
-  
-  // If using special '_ALL_FILES_' mode, get all files from all workspaces
+
+  // --- (Keep the existing logic for collecting files based on _ALL_FILES_ or profiles) ---
   if (currentProfiles.includes('_ALL_FILES_')) {
-    // Ask for confirmation before processing all files
     const continueWithAllFiles = await vscode.window.showInformationMessage(
-      'ConPlug: This will concatenate ALL files in the workspace and may be slow for large workspaces. Continue?',
+      `ConPlug: This will process ALL files in the workspace (up to ${Math.round(maxContentSize / 1024 / 1024)}MB limit). Continue?`,
       { modal: true },
       'Yes', 'No'
     );
-    
+
     if (continueWithAllFiles !== 'Yes') {
       return;
     }
-    
-    // Show progress indicator while collecting files
+
     await vscode.window.withProgress({
       location: vscode.ProgressLocation.Notification,
       title: 'ConPlug: Collecting files from workspace...',
       cancellable: false
     }, async (progress) => {
-      // Collect all files from each workspace
       for (const folder of workspaceFolders) {
         const allWorkspaceFiles = getAllWorkspaceFiles(folder.uri.fsPath);
         allWorkspaceFiles.forEach(file => allFiles.add(file));
         progress.report({ message: `Found ${allFiles.size} files...` });
       }
     });
-  }
-  // Otherwise, use the selected profiles
-  else {
+  } else {
     for (const profileName of currentProfiles) {
       const profile = profiles.get(profileName);
       if (!profile) {
         vscode.window.showErrorMessage(`ConPlug: Profile "${profileName}" not found`);
         continue;
       }
-      
+
       const profileFiles = resolveFiles(profile, profile.workspacePath);
       profileFiles.forEach(file => allFiles.add(file));
     }
   }
-  
+  // --- (End of file collection logic) ---
+
   const filesToConcatenate = Array.from(allFiles);
-  
+
   if (filesToConcatenate.length === 0) {
     vscode.window.showWarningMessage('ConPlug: No files to concatenate in the selected profiles');
     return;
   }
 
-  // Update the filesToConcatenateSet with the resolved files
+  // Update the filesToConcatenateSet with the resolved files for decoration
   filesToConcatenateSet.clear();
   filesToConcatenate.forEach(file => filesToConcatenateSet.add(file));
-  
-  // Force refresh of file decorations to show the marks
   vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
 
-  // Get plugin configuration
-  const config = vscode.workspace.getConfiguration('conplug');
-  const headerPrefix = config.get<string>('headerPrefix', "\n");
-  const headerSuffix = config.get<string>('headerSuffix', "\n");
-
-  // Concatenate files
   let content = '';
+  let currentSize = 0;
+  let sizeLimitExceeded = false;
+  let largestFileSize = 0;
+  let largestFileName = ''; // Store relative path
+  let largestFileFullPath = ''; // Store full path if needed
+
+  // Concatenate files with size checking
   for (const file of filesToConcatenate) {
     try {
-      const fileContent = fs.readFileSync(file, 'utf8');
-      // Find which workspace folder this file belongs to
+      const stats = fs.statSync(file);
+      const fileSize = stats.size;
+
+      // Find which workspace folder this file belongs to for relative path
       const workspaceFolder = getWorkspaceFolderForFile(file);
-      if (!workspaceFolder) {
-        vscode.window.showErrorMessage(`ConPlug: Could not determine workspace folder for ${file}`);
-        continue;
+      const relativeFilePath = workspaceFolder
+        ? path.relative(workspaceFolder.uri.fsPath, file)
+        : file; // Fallback to full path if workspace not found
+
+      // Track largest file
+      if (fileSize > largestFileSize) {
+          largestFileSize = fileSize;
+          largestFileName = relativeFilePath;
+          largestFileFullPath = file; // Store full path just in case
       }
-      
-      const relativeFilePath = path.relative(workspaceFolder.uri.fsPath, file);
+
+      // Estimate header size (approximation is fine)
       const commentStyle = getCommentStyleForFile(file);
- 
-      // Special handling for HTML and CSS comments that need closing tags
       const ext = path.extname(file).toLowerCase();
-      if (['.html', '.xml', '.svg', '.jsx', '.tsx'].includes(ext)) {
-        content += `${headerPrefix}<!-- File: ${relativeFilePath} -->${headerSuffix}${fileContent}\n\n`;
-      } else if (['.css', '.scss', '.less'].includes(ext)) {
-        content += `${headerPrefix}/* File: ${relativeFilePath} */${headerSuffix}${fileContent}\n\n`;
-      } else {
-        content += `${headerPrefix}${commentStyle} File: ${relativeFilePath}${headerSuffix}${fileContent}\n\n`;
+      let headerEstimate = `${headerPrefix}${commentStyle} File: ${relativeFilePath}${headerSuffix}\n\n`;
+      if (['.html', '.xml', '.svg', '.jsx', '.tsx', '.css', '.scss', '.less'].includes(ext)) {
+          // Estimate size for XML/HTML/CSS style comments (slightly different structure)
+          headerEstimate = `${headerPrefix}<!-- File: ${relativeFilePath} -->${headerSuffix}\n\n`; // Adjust length based on actual format
       }
-    } catch (err) {
-      vscode.window.showErrorMessage(`ConPlug: Error reading file ${file}`);
+      const estimatedChunkSize = fileSize + Buffer.byteLength(headerEstimate, 'utf8'); // Use Buffer.byteLength for accuracy
+
+      // Check if adding this file would exceed the limit
+      if (currentSize + estimatedChunkSize > maxContentSize) {
+        sizeLimitExceeded = true;
+        vscode.window.showWarningMessage(`ConPlug: Maximum content size (${maxContentSize} bytes) exceeded while processing '${relativeFilePath}'. Generating file list instead.`);
+        break; // Stop processing files for content
+      }
+
+      // Read file content and construct the actual header
+      const fileContent = fs.readFileSync(file, 'utf8');
+      let fileHeader = '';
+      if (['.html', '.xml', '.svg', '.jsx', '.tsx'].includes(ext)) {
+        fileHeader = `${headerPrefix}<!-- File: ${relativeFilePath} -->${headerSuffix}`;
+      } else if (['.css', '.scss', '.less'].includes(ext)) {
+        fileHeader = `${headerPrefix}/* File: ${relativeFilePath} */${headerSuffix}`;
+      } else {
+        fileHeader = `${headerPrefix}${commentStyle} File: ${relativeFilePath}${headerSuffix}`;
+      }
+
+      const chunkToAdd = `${fileHeader}${fileContent}\n\n`;
+      content += chunkToAdd;
+      currentSize += Buffer.byteLength(chunkToAdd, 'utf8'); // Update actual size
+
+    } catch (err: any) {
+      // Check if it's a directory or other non-file issue we can maybe ignore
+      if (err.code === 'EISDIR') {
+          console.warn(`ConPlug: Skipping directory listed in profile: ${file}`);
+      } else {
+          vscode.window.showErrorMessage(`ConPlug: Error reading file ${file}: ${err.message}`);
+          // Optionally continue to next file or stop? Let's continue for now.
+      }
+    }
+  } // End of file processing loop
+
+  // --- Output Generation ---
+
+  let finalContent = '';
+  let finalMessage = '';
+
+  if (sizeLimitExceeded) {
+    // Generate file list instead of content
+    finalContent = `Maximum content size (${maxContentSize} bytes) exceeded.\n\nList of files that would have been included:\n\n`;
+    let totalListedSize = 0;
+    for (const file of filesToConcatenate) {
+        try {
+            const stats = fs.statSync(file);
+            const fileSize = stats.size;
+            totalListedSize += fileSize;
+            const workspaceFolder = getWorkspaceFolderForFile(file);
+            const relativeFilePath = workspaceFolder
+                ? path.relative(workspaceFolder.uri.fsPath, file)
+                : file;
+            finalContent += `- ${relativeFilePath} (${fileSize} bytes)\n`;
+        } catch (err: any) {
+            finalContent += `- ${file} (Error reading size: ${err.message})\n`;
+        }
+    }
+    finalContent += `\nTotal potential size: ${totalListedSize} bytes`;
+    finalMessage = `ConPlug: Content size limit exceeded. File list generated.`;
+    // Don't copy to clipboard automatically in this case unless configured differently
+  } else {
+    // Use the concatenated content
+    finalContent = content;
+    finalMessage = 'ConPlug: Concatenated content generated.';
+
+    // Copy to clipboard if configured
+    if (autoCopyToClipboard) {
+      await vscode.env.clipboard.writeText(finalContent);
+      let clipboardMessage = 'ConPlug: Concatenated content copied to clipboard';
+      if (largestFileName) {
+          clipboardMessage += `. Largest file: ${largestFileName} (${largestFileSize} bytes)`;
+      }
+      vscode.window.showInformationMessage(clipboardMessage);
+    } else {
+        // Still show the largest file info even if not copying
+        if (largestFileName) {
+            finalMessage += ` Largest file: ${largestFileName} (${largestFileSize} bytes)`;
+        }
+        vscode.window.showInformationMessage(finalMessage);
     }
   }
 
-  // Copy to clipboard if configured
-  if (config.get<boolean>('autoCopyToClipboard')) {
-    await vscode.env.clipboard.writeText(content);
-    vscode.window.showInformationMessage('ConPlug: Concatenated content copied to clipboard');
-  }
-
   // Show in a new editor
-  const doc = await vscode.workspace.openTextDocument({ content });
-  await vscode.window.showTextDocument(doc);
+  try {
+      const doc = await vscode.workspace.openTextDocument({ content: finalContent, language: sizeLimitExceeded ? 'plaintext' : undefined }); // Use plaintext for the list
+      await vscode.window.showTextDocument(doc);
+  } catch(error: any) {
+      vscode.window.showErrorMessage(`ConPlug: Error opening document: ${error.message}`);
+      console.error("ConPlug: Error opening text document:", error);
+      // Fallback: Show message if editor fails
+      if(!sizeLimitExceeded && !autoCopyToClipboard) {
+          vscode.window.showInformationMessage(finalMessage); // Show the message if not copied and editor failed
+      }
+  }
 }
 
 // Helper function to find which workspace folder a file belongs to
